@@ -1,4 +1,4 @@
-name: Pull and Push Apache2 to ACR and Deploy to AKS
+name: Web App Deployment in AKS
 
 on:
   workflow_dispatch:
@@ -14,6 +14,9 @@ env:
   TAG: ${{ github.run_id }}
   AKS_RG: dev-aks-rg
   AKS_CLUSTER: dev-mq-techtransfer-aks-cluster-01
+  SA_NAME: workload-identity-sa
+  SA_NAMESPACE: testns
+  CLIENT_ID: 2a54b4a8-903d-42c8-823d-2765ad73cde7
 
 jobs:
   push-apache-and-deploy:
@@ -45,12 +48,15 @@ jobs:
         run: |
           az aks get-credentials --resource-group ${{ env.AKS_RG }} --name ${{ env.AKS_CLUSTER }} --overwrite-existing
 
-      - name: Install kubelogin
+      - name: Install kubelogin on Linux
         run: |
-          wget --quiet --show-progress --progress=bar:force:noscroll -O kubelogin.tar.gz https://github.com/Azure/kubelogin/releases/download/v0.0.28/kubelogin-linux-amd64.tar.gz
-          tar -xzf kubelogin.tar.gz
-          sudo mv kubelogin /usr/local/bin/
-          kubelogin --version
+          curl -L -o kubelogin.zip https://github.com/Azure/kubelogin/releases/download/v0.0.28/kubelogin-linux-amd64.zip
+          unzip kubelogin.zip -d kubelogin-extract
+          chmod +x kubelogin-extract/bin/linux_amd64/kubelogin
+          sudo mv kubelogin-extract/bin/linux_amd64/kubelogin /usr/local/bin/kubelogin
+      - name: Convert kubeconfig for exec auth with kubelogin
+        run: |
+          kubelogin convert-kubeconfig -l azurecli
 
 
       - name: Create namespace testns if not exists
@@ -78,6 +84,25 @@ jobs:
                 labels:
                   app: apache
               spec:
+                serviceAccountName: ${{ env.SA_NAME }}
                 containers:
                 - name: apache
-                  image: ${{ env.ACR_LOGIN_SERVER }}/http
+                  image: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+                  ports:
+                  - containerPort: 80
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: apache-service
+            namespace: testns
+          spec:
+            selector:
+              app: apache
+            ports:
+            - protocol: TCP
+              port: 80
+              targetPort: 80
+            type: LoadBalancer
+          EOF
+          kubectl apply -f apache-deployment.yaml
