@@ -1,0 +1,83 @@
+name: Pull and Push Apache2 to ACR and Deploy to AKS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: devtechtransferacr01
+  ACR_LOGIN_SERVER: devtechtransferacr01.azurecr.io
+  IMAGE_NAME: httpd
+  TAG: ${{ github.run_id }}
+  AKS_RG: dev-aks-rg
+  AKS_CLUSTER: dev-mq-techtransfer-aks-cluster-01
+
+jobs:
+  push-apache-and-deploy:
+    runs-on: azure-devdx-ubuntu-latest-2-core
+
+    steps:
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.CLIENT_ID }}
+          tenant-id: ${{ secrets.TENANTID }}
+          subscription-id: ${{ secrets.SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+          allow-no-subscriptions: true
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Pull and Tag Apache2 image
+        run: |
+          docker pull httpd:latest
+          docker tag httpd:latest ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+
+      - name: Push image to ACR
+        run: |
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+
+      - name: Get AKS Credentials
+        run: |
+          az aks get-credentials --resource-group ${{ env.AKS_RG }} --name ${{ env.AKS_CLUSTER }} --overwrite-existing
+
+      - name: Install kubelogin
+        run: |
+          wget --quiet --show-progress --progress=bar:force:noscroll -O kubelogin.tar.gz https://github.com/Azure/kubelogin/releases/download/v0.0.28/kubelogin-linux-amd64.tar.gz
+          tar -xzf kubelogin.tar.gz
+          sudo mv kubelogin /usr/local/bin/
+          kubelogin --version
+
+
+      - name: Create namespace testns if not exists
+        run: |
+          kubectl get namespace testns || kubectl create namespace testns
+
+
+      - name: Create Apache2 deployment and service YAML
+        run: |
+          cat <<EOF > apache-deployment.yaml
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: apache-deployment
+            namespace: testns
+            labels:
+              app: apache
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: apache
+            template:
+              metadata:
+                labels:
+                  app: apache
+              spec:
+                containers:
+                - name: apache
+                  image: ${{ env.ACR_LOGIN_SERVER }}/http
