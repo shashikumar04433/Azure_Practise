@@ -1,6 +1,5 @@
 
-name: MQ_QRIUS_Webapp_Pipeline
-
+name:Test Pipeline
 on:
   workflow_dispatch:
 
