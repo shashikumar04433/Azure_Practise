@@ -1,29 +1,39 @@
-name: Web App Deployment in AKS
+
+name: MQ_QRIUS_Webapp_Pipeline
 
 on:
   workflow_dispatch:
 
 permissions:
   id-token: write
-  contents: read
+  contents: read 
 
 env:
-  ACR_NAME: devtechtransferacr01
-  ACR_LOGIN_SERVER: devtechtransferacr01.azurecr.io
-  IMAGE_NAME: httpd
-  TAG: ${{ github.run_id }}
-  AKS_RG: dev-aks-rg
-  AKS_CLUSTER: dev-mq-techtransfer-aks-cluster-01
-  SA_NAME: workload-identity-sa
-  SA_NAMESPACE: testns
-  CLIENT_ID: 2a54b4a8-903d-42c8-823d-2765ad73cde7
+  DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY }} 
+  ACR_NAME: ${{ vars.ACR_NAME }} 
+  serviceaccount: ${{ vars.SERVICEACCOUNT }}
+  namespace: ${{ vars.NAMESPACE }}
+  CLIENT_ID_SA: ${{ secrets.CLIENT_ID_SA }}
+  REACT_APP_ALERT_MESSAGE: ${{ vars.REACT_APP_ALERT_MESSAGE }}
+  REACT_APP_DATASOURCE_URL: ${{ vars.REACT_APP_DATASOURCE_URL }}
+  REACT_APP_ENDPOINT_CONFIGURATION_SERVER: ${{ vars.REACT_APP_ENDPOINT_CONFIGURATION_SERVER }}
+  REACT_APP_ENDPOINT_QUERY_SERVER: ${{ vars.REACT_APP_ENDPOINT_QUERY_SERVER }}
+  REACT_APP_SITE_TITLE: ${{ vars.REACT_APP_SITE_TITLE }}
+  DOCKERFILE_PATH: ${{ vars.DOCKERFILE_PATH }}
+  env: ${{ vars.env }}
+  system_debug: ${{ vars.system_debug }}
+  AKS_RG: ${{ vars.AKS_RG }}
+  AKS_CLUSTER: ${{ vars.AKS_CLUSTER }}
 
 jobs:
-  push-apache-and-deploy:
+  deploy-to-aks:
     runs-on: azure-devdx-ubuntu-latest-2-core
 
     steps:
-      - name: Azure Login via OIDC
+      - name: Checkout source code
+        uses: actions/checkout@v4.1.0
+
+      - name: Log into Azure CLI
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.CLIENT_ID }}
@@ -35,19 +45,18 @@ jobs:
       - name: Login to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
 
-      - name: Pull and Tag Apache2 image
+      - name: Build & Push WebApp Image
         run: |
-          docker pull httpd:latest
-          docker tag httpd:latest ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
-
-      - name: Push image to ACR
-        run: |
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
-
+          REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="${{ github.run_id }}"
+          WEBAPP_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.ACR_NAME }}/$REPO_NAME:$IMAGE_TAG"
+          echo "Building and pushing image: $WEBAPP_IMAGE"
+          docker build -f mq_qrius_-_DEV/MQ_QRIUS-Webapp/Dockerfile -t "$WEBAPP_IMAGE" mq_qrius_-_DEV/MQ_QRIUS-Webapp
+          docker push "$WEBAPP_IMAGE"
+          echo "WEBAPP_IMAGE=$WEBAPP_IMAGE" >> $GITHUB_ENV
       - name: Get AKS Credentials
         run: |
           az aks get-credentials --resource-group ${{ env.AKS_RG }} --name ${{ env.AKS_CLUSTER }} --overwrite-existing
-
       - name: Install kubelogin on Linux
         run: |
           curl -L -o kubelogin.zip https://github.com/Azure/kubelogin/releases/download/v0.0.28/kubelogin-linux-amd64.zip
@@ -55,54 +64,22 @@ jobs:
           chmod +x kubelogin-extract/bin/linux_amd64/kubelogin
           sudo mv kubelogin-extract/bin/linux_amd64/kubelogin /usr/local/bin/kubelogin
       - name: Convert kubeconfig for exec auth with kubelogin
+        run: kubelogin convert-kubeconfig -l azurecli
+
+      - name: Create namespace if not exists
         run: |
-          kubelogin convert-kubeconfig -l azurecli
-
-
-      - name: Create namespace testns if not exists
+          kubectl get namespace ${{ env.namespace }} || kubectl create namespace ${{ env.namespace }}
+      - name: Render deploy.yml with environment variables
+        env:
+          WEBAPP_IMAGE: ${{ env.WEBAPP_IMAGE }}
+          NAMESPACE: ${{ env.namespace }}
+          SERVICEACCOUNT: ${{ env.serviceaccount }}
+          REACT_APP_ENDPOINT_QUERY_SERVER: ${{ env.REACT_APP_ENDPOINT_QUERY_SERVER }}
+          REACT_APP_ENDPOINT_CONFIGURATION_SERVER: ${{ env.REACT_APP_ENDPOINT_CONFIGURATION_SERVER }}
+          REACT_APP_DATASOURCE_URL: ${{ env.REACT_APP_DATASOURCE_URL }}
         run: |
-          kubectl get namespace testns || kubectl create namespace testns
-
-
-      - name: Create Apache2 deployment and service YAML
-        run: |
-          cat <<EOF > apache-deployment.yaml
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: apache-deployment
-            namespace: testns
-            labels:
-              app: apache
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: apache
-            template:
-              metadata:
-                labels:
-                  app: apache
-              spec:
-                serviceAccountName: ${{ env.SA_NAME }}
-                containers:
-                - name: apache
-                  image: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
-                  ports:
-                  - containerPort: 80
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: apache-service
-            namespace: testns
-          spec:
-            selector:
-              app: apache
-            ports:
-            - protocol: TCP
-              port: 80
-              targetPort: 80
-            type: LoadBalancer
-          EOF
-          kubectl apply -f apache-deployment.yaml
+          echo "Rendering deploy.yml with environment variables"
+          envsubst < mq_qrius_-_DEV/MQ_QRIUS-Webapp/deploy.yml > rendered-deploy.yml
+          cat rendered-deploy.yml
+      - name: Deploy QRIUS WebApp
+        run: kubectl apply -f rendered-deploy.yml
