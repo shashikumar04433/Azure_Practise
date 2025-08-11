@@ -31,4 +31,9 @@ az aks get-credentials --resource-group <rg-name>  --name <<cluster-name> --over
 * az network public-ip list --query "[].{Name:name,SKU:sku.name,IP:ipAddress}" -o table
 * kubectl port-forward svc/apache-service 8080:80 -n <namespace>
 ```
+**Step7**
+```
+* Make sure you deploy the right deploy.yml in proper path and idempodent errors (Space errors)
+* then deploy your docker
+```
 
