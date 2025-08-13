@@ -3,14 +3,28 @@
 * An Function App is basically the container / hosting environment in Azure.
   where one or more Azure Functions live and run.
 ```
-
+**Azure Function Apps**
+```
+Purpose:
+* Host and run serverless functions — small pieces of code that run on demand (HTTP request, timer, queue message, etc.).
+Billing:
+* Pay only for execution time (Consumption Plan) or keep them always-on (Premium/Dedicated Plan).
+Supported languages:
+* C#, JavaScript/TypeScript, Python, Java, PowerShell, etc.
+```
+**Trigger types:**
+```
+* HTTP trigger → Runs when an API call is made.
+* Timer trigger → Runs on a schedule.
+* Blob trigger → Runs when a file is uploaded to Blob Storage.
+* Queue trigger → Runs when a message arrives in a queue.
+```
 **Types of Function App Plan**
 ```
 * Consumption Plan
 * Premium Plan
 * Flex Consumption
 * App Service Plan
-* 
 ```
 **Consumption Plan**
 ```
