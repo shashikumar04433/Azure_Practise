@@ -70,3 +70,19 @@ faster scaling, and networking capabilities like VNET integration.
 * Scale-to-zero – No running costs when your function is idle.
 * Max execution time up to 60 minutes – More flexible than classic Consumption (5–10 min).
 ```
+**App Service Plan**
+```
+* Think of it as: Run Function Apps like a normal web app.
+Features:
+* Runs on fixed VMs that you pay for whether functions run or not.
+* Can share with Web Apps, APIs, and other App Services.
+* Full VNET integration.
+
+Best for:
+* Already running web apps on App Service and want to reuse capacity.
+* Continuous background jobs.
+
+Downside:
+* No scale-to-zero.
+* You manage scaling.
+```
