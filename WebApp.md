@@ -38,6 +38,7 @@
 ```
 * What it is:
   A ready-to-use WordPress CMS running on Azure App Service with MySQL.
+
 * Use case:
   Launching a content-driven website or blog quickly using WordPress.
   Example: A company blog, news portal, or portfolio site built on WordPress.
