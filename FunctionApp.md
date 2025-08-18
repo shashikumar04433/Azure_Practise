@@ -1,4 +1,4 @@
-## Function App Tutorial:
+## Function App Tutorial: (Choose Consumption Plan for free account with powershell core for testing first time)
 ```
 * An Function App is basically the container / hosting environment in Azure.
   where one or more Azure Functions live and run.
