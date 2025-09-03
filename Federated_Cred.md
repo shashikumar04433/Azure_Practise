@@ -63,10 +63,10 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+     uses: actions/checkout@v3
 
-      - name: Login to Azure //for login into the azure ur not passing here a secret it will automattically will login using the fed credentials
+- name: Login to Azure //for login into the azure ur not passing here a secret it will automattically will login using the fed credentials
         uses: azure/login@v1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }} 
