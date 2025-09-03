@@ -30,3 +30,9 @@ GitHub gives you a passport (OIDC token).
 AWS/Azure/GCP checks if your passport is valid and matches conditions.
 If valid → you get a temporary visa (short-lived access token).
 ```
+**Advantages**
+```
+* No secrets to rotate (secure).
+* Short-lived tokens (reduce attack risk).
+* Easier automation (CI/CD friendly).
+```
